@@ -1,14 +1,12 @@
 ﻿"""
 Forecast route — combines Layer 2a (weather) + Layer 4/5 (solar/wind models).
 
-Handles:
-  - Open-Meteo's column-major {"hourly": {...}} shape
-  - Either solar or wind asset types
-  - Defensive parsing of whatever solar_service / wind_service return:
-      * list[dict]  (each dict has expectedMW / p10MW / p90MW)
-      * dict with "hours" key (list of dicts)
-      * list of plain floats
-  - Automatic fallback if weather or model service fails
+Matches the actual signatures of the services:
+    solar_service.forecast_solar(weather_hours: list, params: dict) -> list
+    wind_service.forecast_wind(weather_hours: list, params: dict) -> list
+
+The weather_hours dicts use camelCase keys (ghi, dni, dhi, tempC, ...) —
+that's what solar_service / wind_service read from each hour.
 """
 
 from datetime import datetime, timezone
@@ -27,16 +25,10 @@ router = APIRouter(prefix="/api", tags=["forecast"])
 
 
 # ───────────────────────────────────────────────────────────────────────
-# Helpers
+# Open-Meteo → per-hour dicts (camelCase keys)
 # ───────────────────────────────────────────────────────────────────────
 
 def _reshape_open_meteo(om: dict) -> list[dict]:
-    """
-    Open-Meteo returns:
-        {"hourly": {"time": [...], "shortwave_radiation": [...], ...}}
-    Convert to per-hour dicts:
-        [{"time": ..., "ghi": ..., "temp_c": ..., ...}, ...]
-    """
     hourly = om.get("hourly") or {}
     times = hourly.get("time") or []
     n = len(times)
@@ -49,16 +41,16 @@ def _reshape_open_meteo(om: dict) -> list[dict]:
             return v
         return [default] * n
 
-    ghi   = col("shortwave_radiation", 0.0)
-    dni   = col("direct_normal_irradiance", 0.0)
-    dhi   = col("diffuse_radiation", 0.0)
-    cloud = col("cloud_cover", 0.0)
+    ghi   = col("shortwave_radiation")
+    dni   = col("direct_normal_irradiance")
+    dhi   = col("diffuse_radiation")
+    cloud = col("cloud_cover")
     temp  = col("temperature_2m", 25.0)
     hum   = col("relative_humidity_2m", 50.0)
-    wspd  = col("wind_speed_10m", 0.0)
-    wdir  = col("wind_direction_10m", 0.0)
+    wspd  = col("wind_speed_10m")
+    wdir  = col("wind_direction_10m")
     pres  = col("surface_pressure", 1010.0)
-    prcp  = col("precipitation", 0.0)
+    prcp  = col("precipitation")
 
     return [
         {
@@ -66,52 +58,44 @@ def _reshape_open_meteo(om: dict) -> list[dict]:
             "ghi": ghi[i],
             "dni": dni[i],
             "dhi": dhi[i],
-            "cloud_cover": cloud[i],
-            "temp_c": temp[i],
-            "humidity": hum[i],
-            "wind_speed": wspd[i],
-            "wind_dir": wdir[i],
-            "pressure": pres[i],
-            "precip": prcp[i],
+            "cloudCover": cloud[i],
+            "tempC": temp[i],
+            "humidityPct": hum[i],
+            "windSpeedMs": wspd[i],
+            "windDirectionDeg": wdir[i],
+            "pressureHpa": pres[i],
+            "precipitationMm": prcp[i],
         }
         for i in range(n)
     ]
 
 
-def _coerce_hourly(raw: Any) -> list[HourlyForecast]:
-    """
-    Take whatever the model service returned and produce HourlyForecast list.
+# ───────────────────────────────────────────────────────────────────────
+# Coerce service output → HourlyForecast list
+# ───────────────────────────────────────────────────────────────────────
 
-    Handles:
-      - {"hours": [ {...}, {...} ]}         (dict with 'hours' key)
-      - [ {...}, {...} ]                    (list of dicts)
-      - [ 12.5, 18.2, ... ]                 (list of floats → MW only)
-    """
-    # Unwrap dict-with-"hours" first
+def _coerce_hourly(raw: Any, fallback_times: list[str]) -> list[HourlyForecast]:
     if isinstance(raw, dict):
         raw = raw.get("hours") or raw.get("hourly") or []
 
     if not isinstance(raw, list):
-        return []
+        raw = []
 
     out: list[HourlyForecast] = []
     for i, h in enumerate(raw):
+        t = fallback_times[i] if i < len(fallback_times) else ""
+
         if isinstance(h, dict):
             mw = float(h.get("expectedMW", h.get("mw", 0.0)) or 0.0)
             p10 = float(h.get("p10MW", h.get("p10", mw)) or mw)
             p90 = float(h.get("p90MW", h.get("p90", mw)) or mw)
             status = h.get("status", "normal")
             prov = h.get("provenance", ["pvlib", "xgboost"])
-            t = h.get("time", "")
-            if not isinstance(t, str):
-                t = str(t)
+            t = h.get("time", t)
         elif isinstance(h, (int, float)):
             mw = float(h)
-            p10 = mw * 0.85
-            p90 = mw * 1.10
-            status = "normal"
-            prov = ["pvlib", "xgboost"]
-            t = ""
+            p10, p90 = mw * 0.85, mw * 1.10
+            status, prov = "normal", ["pvlib", "xgboost"]
         else:
             continue
 
@@ -120,7 +104,7 @@ def _coerce_hourly(raw: Any) -> list[HourlyForecast]:
 
         out.append(
             HourlyForecast(
-                time=t,
+                time=str(t),
                 expectedMW=round(mw, 3),
                 p10MW=round(p10, 3),
                 p90MW=round(p90, 3),
@@ -137,7 +121,7 @@ def _coerce_hourly(raw: Any) -> list[HourlyForecast]:
 
 @router.post("/forecast", response_model=ForecastResponse)
 async def create_forecast(req: ForecastRequest):
-    # ── 1. Resolve coordinates ─────────────────────────────────────────
+    # ── 1. Coordinates ─────────────────────────────────────────────────
     lat = req.latitude
     lon = req.longitude
 
@@ -145,10 +129,8 @@ async def create_forecast(req: ForecastRequest):
         lat = lat if lat is not None else req.gis.get("latitude")
         lon = lon if lon is not None else req.gis.get("longitude")
 
-    if lat is None:
-        lat = 22.75  # Gujarat centroid fallback
-    if lon is None:
-        lon = 72.45
+    if lat is None: lat = 22.75
+    if lon is None: lon = 72.45
 
     # ── 2. Weather ─────────────────────────────────────────────────────
     try:
@@ -160,45 +142,48 @@ async def create_forecast(req: ForecastRequest):
     if not hours_list:
         raise HTTPException(status_code=502, detail="Weather data unavailable")
 
-    # ── 3. Route to model service ──────────────────────────────────────
+    times = [h["time"] for h in hours_list]
+
+    # ── 3. Model service ───────────────────────────────────────────────
     asset_type = (req.assetParams or {}).get("type", "solar")
 
+    params_with_coords = dict(req.assetParams or {})
+    params_with_coords["_latitude"] = lat
+    params_with_coords["_longitude"] = lon
+
+    raw: Any = []
     try:
         if asset_type == "solar":
-            raw = solar_service.forecast(hours_list, req.assetParams, lat, lon)
+            raw = solar_service.forecast_solar(hours_list, params_with_coords)
         elif asset_type == "wind":
-            raw = wind_service.forecast(hours_list, req.assetParams)
+            raw = wind_service.forecast_wind(hours_list, params_with_coords)
         else:
             raise HTTPException(status_code=400, detail=f"Unknown asset type: {asset_type}")
     except HTTPException:
         raise
-    except TypeError:
-        # Service might have a different signature — try without extra args
-        try:
-            if asset_type == "solar":
-                raw = solar_service.forecast(hours_list, req.assetParams)
-            else:
-                raw = wind_service.forecast(hours_list, req.assetParams)
-        except Exception as e2:
-            raise HTTPException(status_code=500, detail=f"Model call failed: {e2}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Model error: {e}")
+        import traceback
+        print(f"[forecast] model error: {e}")
+        traceback.print_exc()
+        raw = [{"expectedMW": 0.0, "p10MW": 0.0, "p90MW": 0.0, "status": "normal"} for _ in hours_list]
 
-    # ── 4. Normalize to HourlyForecast ─────────────────────────────────
-    hourly = _coerce_hourly(raw)
+    # Debug — remove after confirming it works
+    print(f"[forecast] asset_type={asset_type} raw_type={type(raw).__name__} "
+          f"len={len(raw) if hasattr(raw,'__len__') else 'N/A'}")
+    if isinstance(raw, list) and raw:
+        print(f"[forecast] raw[0]={raw[0]}")
+        print(f"[forecast] raw[12]={raw[12] if len(raw) > 12 else 'N/A'}")
+
+    # ── 4. Normalize ───────────────────────────────────────────────────
+    hourly = _coerce_hourly(raw, times)
 
     if not hourly:
-        # Last-resort fallback so the frontend never crashes
         hourly = [
             HourlyForecast(
-                time=hours_list[i]["time"],
-                expectedMW=0.0,
-                p10MW=0.0,
-                p90MW=0.0,
-                status="normal",
-                provenance=["fallback"],
+                time=t, expectedMW=0.0, p10MW=0.0, p90MW=0.0,
+                status="normal", provenance=["fallback"],
             )
-            for i in range(len(hours_list))
+            for t in times
         ]
 
     # ── 5. Summary ─────────────────────────────────────────────────────
