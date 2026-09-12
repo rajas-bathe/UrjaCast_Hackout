@@ -12,22 +12,21 @@ from app.api.routes import gis
 
 app = FastAPI(title="UrjaCast API", version="2.0.0")
 
+# ─── CORS ──────────────────────────────────────────────────────────────
+# Hackathon-safe: allow any origin, no credentials. This guarantees the
+# browser will not block requests from Vercel preview URLs, custom domains,
+# localhost, etc. If you later enable credentials, switch to an explicit
+# allow_origins list (no wildcard).
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "https://urja-cast.vercel.app",
-        "https://urjacast.vercel.app",
-        "https://urjacast-hackout.vercel.app",
-        "https://urja-cast-hackout.vercel.app",
-    ],
-    allow_origin_regex=r"https://.*\.vercel\.app",
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
+# ─── Routers ───────────────────────────────────────────────────────────
 app.include_router(auth.router)
 app.include_router(sites.router)
 app.include_router(weather.router)
@@ -38,6 +37,7 @@ app.include_router(alerts.router)
 app.include_router(gis.router)
 
 
+# ─── Health ────────────────────────────────────────────────────────────
 @app.get("/")
 def root():
     return {"name": "UrjaCast API", "status": "running", "docs": "/docs"}
