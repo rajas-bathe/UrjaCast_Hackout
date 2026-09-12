@@ -1,0 +1,13 @@
+{
+  "features": [
+    "irradiance",
+    "temp_air",
+    "temp_module",
+    "solar_zenith",
+    "solar_azimuth",
+    "hour",
+    "doy",
+    "pvlib_mw"
+  ],
+  "target": "ac_power"
+}

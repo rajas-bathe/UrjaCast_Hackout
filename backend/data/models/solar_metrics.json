@@ -1,0 +1,27 @@
+{
+  "mae": 31.73,
+  "rmse": 70.54,
+  "normalizedMae": 0.0836,
+  "r2": 0.9703,
+  "baseline": {
+    "mae": 379.21,
+    "rmse": 557.83,
+    "r2": -0.8557
+  },
+  "byLeadTime": {
+    "h24": {
+      "mae": null,
+      "rmse": null
+    },
+    "h48": {
+      "mae": null,
+      "rmse": null
+    },
+    "h72": {
+      "mae": null,
+      "rmse": null
+    }
+  },
+  "validationStatus": "complete",
+  "note": "Plant_1 Kaggle \u00b7 all inverters \u00b7 per-inverter capacity \u00b7 chronological split"
+}
