@@ -1,3 +1,6 @@
+// ─────────────────────────────────────────────────────────────────────
+// Auth
+// ─────────────────────────────────────────────────────────────────────
 export interface LoginRequest {
   email: string
   password: string
@@ -22,6 +25,9 @@ export interface AuthResponse {
   user: AuthUser
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Asset Parameters
+// ─────────────────────────────────────────────────────────────────────
 export interface AssetParamsSolar {
   type: 'solar'
   dcCapacityMW: number
@@ -47,7 +53,9 @@ export interface AssetParamsWind {
 
 export type AssetParams = AssetParamsSolar | AssetParamsWind
 
-// PATCHED: added optional resolutionLevel/terrainClass/gridFallback fields for 5km grid fallback support
+// ─────────────────────────────────────────────────────────────────────
+// GIS
+// ─────────────────────────────────────────────────────────────────────
 export interface GISHierarchy {
   state: string
   district: string
@@ -58,6 +66,9 @@ export interface GISHierarchy {
   gridFallback?: boolean
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Sites
+// ─────────────────────────────────────────────────────────────────────
 export interface Site {
   id: string
   name: string
@@ -76,8 +87,18 @@ export interface CreateSiteRequest {
   assetParams: AssetParams
 }
 
-export type Provenance = 'measured' | 'model-derived' | 'static-geospatial' | 'simulated'
+// ─────────────────────────────────────────────────────────────────────
+// Provenance
+// ─────────────────────────────────────────────────────────────────────
+export type Provenance =
+  | 'measured'
+  | 'model-derived'
+  | 'static-geospatial'
+  | 'simulated'
 
+// ─────────────────────────────────────────────────────────────────────
+// Weather
+// ─────────────────────────────────────────────────────────────────────
 export interface HourlyWeather {
   time: string
   ghi: number
@@ -109,7 +130,17 @@ export interface CurrentWeather {
   provenance: 'model-derived'
 }
 
-export type ForecastModelTag = 'pvlib' | 'xgboost' | 'power-curve' | 'ml-correction'
+// ─────────────────────────────────────────────────────────────────────
+// Forecast — UPDATED with new provenance tags + weather fields
+// ─────────────────────────────────────────────────────────────────────
+export type ForecastModelTag =
+  | 'pvlib'
+  | 'xgboost'
+  | 'power-curve'
+  | 'ml-correction'
+  | 'log-law'            // ← ADDED (wind shear)
+  | 'density-corrected'  // ← ADDED (air density)
+  | 'fallback'
 
 export interface HourlyForecast {
   time: string
@@ -118,6 +149,8 @@ export interface HourlyForecast {
   p90MW: number
   status: 'normal' | 'surplus' | 'shortfall'
   provenance: ForecastModelTag[]
+  ghi?: number | null         // ← ADDED (W/m²) — solar tab
+  wind_speed?: number | null  // ← ADDED (m/s) — wind tab
 }
 
 export interface ForecastSummary {
@@ -139,9 +172,15 @@ export interface ForecastResponse {
 
 export interface ForecastRequest {
   siteId: string
+  latitude?: number
+  longitude?: number
+  gis?: GISHierarchy
   assetParams: AssetParams
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Decision
+// ─────────────────────────────────────────────────────────────────────
 export interface OperatingRequirement {
   exportLimitMW: number
   loadRequirementMW: number
@@ -202,6 +241,9 @@ export interface DecisionResponse {
   timeline: DecisionTimelinePoint[]
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Metrics
+// ─────────────────────────────────────────────────────────────────────
 export interface LeadTimeMetric {
   mae: number | null
   rmse: number | null
@@ -220,6 +262,9 @@ export interface MetricsResponse {
   note: string
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Alerts
+// ─────────────────────────────────────────────────────────────────────
 export interface Alert {
   id: string
   siteId: string
@@ -228,12 +273,18 @@ export interface Alert {
   time: string
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Historical performance
+// ─────────────────────────────────────────────────────────────────────
 export interface HistoricalPerformancePoint {
   time: string
   actualMW: number
   forecastMW: number
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// API errors
+// ─────────────────────────────────────────────────────────────────────
 export interface ApiErrorShape {
   message: string
   status?: number

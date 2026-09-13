@@ -9,6 +9,8 @@ class HourlyForecast(BaseModel):
     p90MW: float
     status: Literal["normal", "surplus", "shortfall"] = "normal"
     provenance: list[str] = []
+    ghi: Optional[float] = None           # ← ADD
+    wind_speed: Optional[float] = None    # ← ADD
 
 
 class ForecastSummary(BaseModel):
