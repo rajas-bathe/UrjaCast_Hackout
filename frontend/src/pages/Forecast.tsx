@@ -120,7 +120,7 @@ export default function Forecast() {
         </div>
 
         {hasData ? (
-          <ForecastAreaChart data={series!} assetType={assetType} />
+          <ForecastAreaChart data={series!} />
         ) : (
           <div className="flex h-64 items-center justify-center text-sm text-slate-400">
             <div className="text-center">
