@@ -1,30 +1,51 @@
-﻿def _power_from_curve(v, params):
-    ci = float(params.get("cutInSpeedMs", 3))
-    rs = float(params.get("ratedSpeedMs", 12))
-    co = float(params.get("cutOutSpeedMs", 25))
-    rp = float(params.get("ratedPowerMW", 3))
+﻿"""
+Wind forecast — turbine power curve baseline.
+
+Public API:
+    forecast_wind(weather_hours: list[dict], params: dict) -> list[dict]
+"""
+
+import numpy as np
+import pandas as pd
+
+
+def _power_curve(v: float, params: dict) -> float:
+    """Standard turbine power curve — cubic ramp between cut-in and rated."""
+    rated_mw = float(params.get("ratedPowerMW", 3.0))
     n = int(params.get("numTurbines", 10))
-    if v < ci or v > co:
+    v_ci = float(params.get("cutInSpeedMs", 3.0))
+    v_r = float(params.get("ratedSpeedMs", 12.0))
+    v_co = float(params.get("cutOutSpeedMs", 25.0))
+
+    if v < v_ci or v >= v_co:
         return 0.0
-    if v >= rs:
-        return rp * n
-    return rp * n * ((v - ci) / (rs - ci)) ** 3
+    if v >= v_r:
+        return rated_mw * n
+    # Cubic ramp between cut-in and rated
+    return rated_mw * n * ((v - v_ci) / (v_r - v_ci)) ** 3
 
 
 def forecast_wind(weather_hours: list, params: dict) -> list:
-    hub = float(params.get("hubHeightM", 90))
-    alpha = 0.14
-    scale = (hub / 10.0) ** alpha
-    results = []
+    if not weather_hours:
+        return []
+
+    hub_h = float(params.get("hubHeightM", 90.0))
+    out = []
+
     for h in weather_hours:
-        v = h["windSpeedMs"] * scale
-        e = _power_from_curve(v, params)
-        results.append({
+        v10 = float(h.get("windSpeedMs", 0.0))
+        # Extrapolate 10m → hub height via power law
+        v_hub = v10 * (hub_h / 10.0) ** 0.14 if v10 > 0 else 0.0
+        mw = _power_curve(v_hub, params)
+        out.append({
             "time": h["time"],
-            "expectedMW": round(e, 2),
-            "p10MW": round(max(0, e * 0.80), 2),
-            "p90MW": round(e * 1.20, 2),
+            "expectedMW": round(mw, 3),
+            "p10MW": round(mw * 0.85, 3),
+            "p90MW": round(mw * 1.10, 3),
             "status": "normal",
-            "provenance": ["power-curve", "open-meteo"],
+            "provenance": ["power-curve"],
         })
-    return results
+
+    mws = [x["expectedMW"] for x in out]
+    print(f"[wind] expected MW: min={min(mws):.3f} max={max(mws):.3f} mean={sum(mws)/len(mws):.3f}")
+    return out

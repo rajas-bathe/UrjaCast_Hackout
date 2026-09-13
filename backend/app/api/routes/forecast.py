@@ -1,14 +1,9 @@
-﻿"""
+"""
 Forecast route — combines Layer 2a (weather) + Layer 4/5 (solar/wind models).
 
-Defensive against:
-  - Open-Meteo's column-major {"hourly": {...}} shape
-  - Either solar or wind asset types
-  - Whatever shape solar_service.forecast() / wind_service.forecast() return:
-      * list[dict]  with expectedMW / p10MW / p90MW
-      * dict with "hours" key
-      * list of plain floats
-  - Any model-service failure → returns zeroed forecast instead of crashing
+Matches the actual service signatures:
+    solar_service.forecast_solar(weather_hours: list, params: dict) -> list
+    wind_service.forecast_wind(weather_hours: list, params: dict) -> list
 """
 
 from datetime import datetime, timezone
@@ -27,11 +22,10 @@ router = APIRouter(prefix="/api", tags=["forecast"])
 
 
 # ───────────────────────────────────────────────────────────────────────
-# Helpers
+# Open-Meteo → per-hour dicts (camelCase keys, matching solar_service)
 # ───────────────────────────────────────────────────────────────────────
 
-def _reshape_open_meteo(om: dict) -> list[dict]:
-    """Open-Meteo column-major → row-major list of per-hour dicts."""
+def _reshape_open_meteo(om: dict) -> list:
     hourly = om.get("hourly") or {}
     times = hourly.get("time") or []
     n = len(times)
@@ -61,28 +55,30 @@ def _reshape_open_meteo(om: dict) -> list[dict]:
             "ghi": ghi[i],
             "dni": dni[i],
             "dhi": dhi[i],
-            "cloud_cover": cloud[i],
-            "temp_c": temp[i],
-            "humidity": hum[i],
-            "wind_speed": wspd[i],
-            "wind_dir": wdir[i],
-            "pressure": pres[i],
-            "precip": prcp[i],
+            "cloudCover": cloud[i],
+            "tempC": temp[i],
+            "humidityPct": hum[i],
+            "windSpeedMs": wspd[i],
+            "windDirectionDeg": wdir[i],
+            "pressureHpa": pres[i],
+            "precipitationMm": prcp[i],
         }
         for i in range(n)
     ]
 
 
-def _coerce_hourly(raw: Any, fallback_times: list[str]) -> list[HourlyForecast]:
-    """Normalize whatever the service returned to HourlyForecast list."""
-    # Unwrap dict-with-"hours"
+# ───────────────────────────────────────────────────────────────────────
+# Coerce service output → HourlyForecast list
+# ───────────────────────────────────────────────────────────────────────
+
+def _coerce_hourly(raw: Any, fallback_times: list) -> list:
     if isinstance(raw, dict):
         raw = raw.get("hours") or raw.get("hourly") or []
 
     if not isinstance(raw, list):
         raw = []
 
-    out: list[HourlyForecast] = []
+    out = []
     for i, h in enumerate(raw):
         t = fallback_times[i] if i < len(fallback_times) else ""
 
@@ -122,7 +118,7 @@ def _coerce_hourly(raw: Any, fallback_times: list[str]) -> list[HourlyForecast]:
 
 @router.post("/forecast", response_model=ForecastResponse)
 async def create_forecast(req: ForecastRequest):
-    # ── 1. Resolve coordinates ─────────────────────────────────────────
+    # ── 1. Coordinates ─────────────────────────────────────────────────
     lat = req.latitude
     lon = req.longitude
 
@@ -144,28 +140,38 @@ async def create_forecast(req: ForecastRequest):
         raise HTTPException(status_code=502, detail="Weather data unavailable")
 
     times = [h["time"] for h in hours_list]
+    print(f"[forecast] weather fetched: {len(hours_list)} hours, "
+          f"ghi[0]={hours_list[0]['ghi']:.1f} ghi[12]={hours_list[12]['ghi'] if len(hours_list) > 12 else 'NA'}")
 
     # ── 3. Model service ───────────────────────────────────────────────
     asset_type = (req.assetParams or {}).get("type", "solar")
-    raw: Any = []
 
+    params_with_coords = dict(req.assetParams or {})
+    params_with_coords["_latitude"] = lat
+    params_with_coords["_longitude"] = lon
+
+    raw: Any = []
     try:
         if asset_type == "solar":
-            # Try 3-arg signature first, fall back to 2-arg
-            try:
-                raw = solar_service.forecast(hours_list, req.assetParams, lat, lon)
-            except TypeError:
-                raw = solar_service.forecast(hours_list, req.assetParams)
+            raw = solar_service.forecast_solar(hours_list, params_with_coords)
         elif asset_type == "wind":
-            raw = wind_service.forecast(hours_list, req.assetParams)
+            raw = wind_service.forecast_wind(hours_list, params_with_coords)
         else:
             raise HTTPException(status_code=400, detail=f"Unknown asset type: {asset_type}")
     except HTTPException:
         raise
     except Exception as e:
-        # Don't crash — log and return zeroed forecast
+        import traceback
         print(f"[forecast] model error: {e}")
+        traceback.print_exc()
         raw = [{"expectedMW": 0.0, "p10MW": 0.0, "p90MW": 0.0, "status": "normal"} for _ in hours_list]
+
+    # Debug — remove after confirming it works
+    print(f"[forecast] asset_type={asset_type} raw_type={type(raw).__name__} "
+          f"len={len(raw) if hasattr(raw, '__len__') else 'N/A'}")
+    if isinstance(raw, list) and len(raw) > 12:
+        print(f"[forecast] raw[0]={raw[0]}")
+        print(f"[forecast] raw[12]={raw[12]}")
 
     # ── 4. Normalize ───────────────────────────────────────────────────
     hourly = _coerce_hourly(raw, times)
