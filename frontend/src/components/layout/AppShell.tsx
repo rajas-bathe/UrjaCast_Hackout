@@ -11,7 +11,7 @@ export function AppShell({ title, children }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-100">
       <Sidebar mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)} />
       <div className="md:pl-60">
         <Header title={title} onOpenMobile={() => setMobileOpen(true)} />

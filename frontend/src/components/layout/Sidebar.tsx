@@ -35,9 +35,15 @@ export function Sidebar({ mobileOpen, onCloseMobile }: SidebarProps) {
   const logout = useAuthStore((s) => s.logout)
   const navigate = useNavigate()
 
-  function handleLogout() {
+  function handleLogout(e?: React.MouseEvent) {
+    e?.stopPropagation()
     logout()
     navigate('/login')
+  }
+
+  function handleOpenProfile() {
+    onCloseMobile()
+    navigate('/profile')
   }
 
   return (
@@ -51,18 +57,23 @@ export function Sidebar({ mobileOpen, onCloseMobile }: SidebarProps) {
       )}
       <aside
         className={cn(
-          'fixed z-40 top-0 left-0 h-full w-60 bg-slate-900 text-slate-300 flex flex-col transition-transform md:translate-x-0',
+          'fixed z-40 top-0 left-0 h-full w-60 bg-gradient-to-b from-emerald-600 via-emerald-700 to-slate-800 text-emerald-50 flex flex-col transition-transform md:translate-x-0',
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
-        <div className="flex items-center gap-2 px-5 py-5 border-b border-slate-800">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600">
+        {/* ── Brand ─────────────────────────────────────── */}
+        <div className="flex items-center gap-2.5 px-5 py-5 border-b border-white/10">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm">
             <Leaf size={18} className="text-white" />
           </div>
-          <span className="text-white font-semibold tracking-tight">UrjaCast</span>
+          <span className="text-white font-bold tracking-tight">UrjaCast</span>
         </div>
 
-        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1" aria-label="Main navigation">
+        {/* ── Nav ───────────────────────────────────────── */}
+        <nav
+          className="flex-1 overflow-y-auto py-4 px-3 space-y-1"
+          aria-label="Main navigation"
+        >
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.path}
@@ -70,10 +81,10 @@ export function Sidebar({ mobileOpen, onCloseMobile }: SidebarProps) {
               onClick={onCloseMobile}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
+                  'flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium transition-all',
                   isActive
-                    ? 'bg-emerald-600 text-white'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white',
+                    ? 'bg-white text-emerald-700 shadow-md'
+                    : 'text-emerald-50/90 hover:bg-white/10 hover:text-white',
                 )
               }
             >
@@ -83,19 +94,35 @@ export function Sidebar({ mobileOpen, onCloseMobile }: SidebarProps) {
           ))}
         </nav>
 
-        <div className="border-t border-slate-800 p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-700 text-sm font-semibold text-white">
-              {user?.name?.charAt(0) || 'U'}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-white">{user?.name || 'Guest'}</p>
-              <p className="truncate text-xs text-slate-400">{user?.team || 'HEXABYTE'}</p>
-            </div>
+        {/* ── Profile → /profile, Logout button separate ── */}
+        <div className="border-t border-white/10 p-3">
+          <div className="flex items-center gap-2 rounded-2xl p-1 hover:bg-white/10 transition-colors">
+            {/* Profile click target */}
             <button
+              type="button"
+              onClick={handleOpenProfile}
+              aria-label="Open profile"
+              className="flex min-w-0 flex-1 items-center gap-3 rounded-xl p-1 text-left"
+            >
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 text-sm font-semibold text-white shadow-sm">
+                {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-white">
+                  {user?.name || 'Guest'}
+                </p>
+                <p className="truncate text-xs text-emerald-50/70">
+                  {user?.team || 'HEXABYTE'}
+                </p>
+              </div>
+            </button>
+
+            {/* Logout click target */}
+            <button
+              type="button"
               aria-label="Log out"
               onClick={handleLogout}
-              className="text-slate-400 hover:text-white"
+              className="shrink-0 rounded-xl p-2 text-emerald-50/70 hover:bg-white/10 hover:text-rose-200 transition-colors"
             >
               <LogOut size={16} />
             </button>

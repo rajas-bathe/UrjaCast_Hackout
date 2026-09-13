@@ -9,6 +9,7 @@ from app.api.routes import decision
 from app.api.routes import metrics
 from app.api.routes import alerts
 from app.api.routes import gis
+from app.api.routes import reports
 
 app = FastAPI(title="UrjaCast API", version="2.0.0")
 

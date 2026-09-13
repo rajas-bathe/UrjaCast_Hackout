@@ -18,7 +18,7 @@ export default function Landing() {
           </div>
           <div className="flex items-center gap-6">
             <button
-              onClick={() => navigate('/technical-overview')}
+              onClick={() => navigate('/how-it-works')}
               className="hidden text-sm font-medium text-slate-700 transition hover:text-emerald-700 md:block"
             >
               How it works
@@ -65,7 +65,7 @@ export default function Landing() {
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </button>
             <button
-              onClick={() => navigate('/technical-overview')}
+              onClick={() => navigate('/how-it-works')}
               className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-7 py-3.5 text-base font-semibold text-slate-900 backdrop-blur-sm transition hover:bg-white"
             >
               How it works

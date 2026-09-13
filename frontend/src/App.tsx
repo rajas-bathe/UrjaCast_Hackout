@@ -3,7 +3,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { ToastProvider } from '@/components/ui/Toast';
 import { AppRouter } from './router';
 
-const PUBLIC_ROUTES = ['/', '/login', '/signup'];
+const PUBLIC_ROUTES = ['/', '/login', '/signup', '/how-it-works'];
 
 export default function App() {
   const { pathname } = useLocation();

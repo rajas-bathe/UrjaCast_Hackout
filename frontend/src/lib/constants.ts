@@ -49,5 +49,4 @@ export const NAV_ITEMS = [
   { label: 'Decision Panel', path: '/decision', icon: 'Zap' },
   { label: 'Reports', path: '/reports', icon: 'FileBarChart' },
   { label: 'Asset Config', path: '/asset-config', icon: 'Settings2' },
-  { label: 'Technical Overview', path: '/technical-overview', icon: 'Cpu' },
 ] as const

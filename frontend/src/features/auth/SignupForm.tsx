@@ -2,34 +2,45 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
-import { useSignup } from '@/hooks/useAuth'
 import { useAuthStore } from '@/store/useAuthStore'
+import { api } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 
 export function SignupForm() {
+  const navigate = useNavigate()
+  const { showToast } = useToast()
+  const authLogin = useAuthStore((s) => s.login)
+  const loginAsDemo = useAuthStore((s) => s.loginAsDemo)
+
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [team, setTeam] = useState('')
-  const signup = useSignup()
-  const loginAsDemo = useAuthStore((s) => s.loginAsDemo)
-  const navigate = useNavigate()
-  const { showToast } = useToast()
+  const [team, setTeam] = useState('HEXABYTE')
+  const [loading, setLoading] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    setLoading(true)
     try {
-      await signup.mutateAsync({ name, email, password, team })
-      showToast('Account created successfully.', 'success')
+      const res = await api.post('/api/auth/signup', {
+        name,
+        email,
+        password,
+        team,
+      })
+      authLogin(res.data.token, res.data.user)
+      showToast('Account created', 'success')
       navigate('/dashboard')
     } catch (err: any) {
-      showToast(err?.message || 'Sign up failed. Try demo mode instead.', 'error')
+      showToast(err?.response?.data?.detail || 'Signup failed', 'error')
+    } finally {
+      setLoading(false)
     }
   }
 
   function handleDemo() {
     loginAsDemo()
-    showToast('Continuing as demo user.', 'success')
+    showToast('Signed in as Demo User', 'success')
     navigate('/dashboard')
   }
 
@@ -37,7 +48,6 @@ export function SignupForm() {
     <form onSubmit={handleSubmit} className="space-y-4">
       <Input
         label="Full Name"
-        name="name"
         placeholder="Rajas Bathe"
         value={name}
         onChange={(e) => setName(e.target.value)}
@@ -46,7 +56,6 @@ export function SignupForm() {
       <Input
         label="Email"
         type="email"
-        name="email"
         placeholder="you@company.com"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
@@ -55,7 +64,6 @@ export function SignupForm() {
       <Input
         label="Password"
         type="password"
-        name="password"
         placeholder="••••••••"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
@@ -63,31 +71,23 @@ export function SignupForm() {
       />
       <Input
         label="Team / Organization"
-        name="team"
         placeholder="HEXABYTE"
         value={team}
         onChange={(e) => setTeam(e.target.value)}
       />
-
-      <Button type="submit" className="w-full" disabled={signup.isPending}>
-        {signup.isPending ? 'Creating account…' : 'Sign Up'}
+      <Button type="submit" disabled={loading} className="w-full">
+        {loading ? 'Creating account…' : 'Sign Up'}
       </Button>
-
-      <div className="relative py-2 text-center text-xs text-slate-400">
-        <span className="bg-white px-2 relative z-10">Or continue with</span>
-        <div className="absolute left-0 top-1/2 h-px w-full bg-slate-200" />
+      <div className="relative py-1 text-center text-xs text-slate-400">
+        <span className="relative z-10 bg-white px-3">Or</span>
+        <div className="absolute inset-x-0 top-1/2 h-px bg-slate-200" />
       </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <Button type="button" variant="outline" className="w-full">
-          Google
-        </Button>
-        <Button type="button" variant="outline" className="w-full">
-          Microsoft
-        </Button>
-      </div>
-
-      <Button type="button" variant="secondary" className="w-full" onClick={handleDemo}>
+      <Button
+        type="button"
+        variant="secondary"
+        onClick={handleDemo}
+        className="w-full"
+      >
         Continue as Demo User
       </Button>
     </form>
