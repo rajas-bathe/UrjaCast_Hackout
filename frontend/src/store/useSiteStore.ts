@@ -47,7 +47,11 @@ export const useSiteStore = create<SiteState>()(
         })),
 
       removeSavedSite: (id) =>
-        set((s) => ({ savedSites: s.savedSites.filter((x) => x.id !== id) })),
+        set((s) => ({
+          savedSites: s.savedSites.filter((x) => x.id !== id),
+          // If the currently-selected site is being deleted, clear it too.
+          selectedSite: s.selectedSite?.id === id ? null : s.selectedSite,
+        })),
 
       clearPending: () =>
         set({
