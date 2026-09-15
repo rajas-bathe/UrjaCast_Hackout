@@ -1,6 +1,6 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MapPin, Sun, Wind, Plus, ArrowRight, Clock } from 'lucide-react'
+import { MapPin, Sun, Wind, Plus, ArrowRight, Clock, Zap, Sliders } from 'lucide-react'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -38,6 +38,84 @@ export default function Dashboard() {
   // existing forecast store data, no new fetching/state.
   const shortHorizon = (forecast?.combined ?? forecast?.solar ?? forecast?.wind ?? []).slice(0, 6)
 
+  // ════════════════════════════════════════════════════════════════
+  // EMPTY STATE — shown on first login or when no site is selected.
+  // Does not affect the normal dashboard below.
+  // ════════════════════════════════════════════════════════════════
+  if (!selectedSite) {
+    return (
+      <PageWrapper className="space-y-5">
+        {/* Hero band — same rounded-3xl + gradient language as the header */}
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-50 via-white to-amber-50/30 border border-slate-200/80 px-6 py-10 md:px-10 md:py-14">
+          <svg
+            className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 opacity-25"
+            viewBox="0 0 200 200"
+            aria-hidden="true"
+          >
+            <circle cx="100" cy="100" r="100" fill="#FCD34D" opacity="0.35" />
+          </svg>
+
+          <div className="relative z-10 mx-auto max-w-2xl text-center">
+            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-600 shadow-lg shadow-emerald-600/25">
+              <Zap className="h-8 w-8 text-white" />
+            </div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-emerald-600">
+              Welcome to UrjaCast
+            </p>
+            <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-900 md:text-4xl">
+              Configure your first site
+            </h1>
+            <p className="mx-auto mt-4 max-w-xl text-base text-slate-600">
+              Forecast renewable generation at any site in Gujarat. Start by
+              selecting a location on the map — we'll resolve it to its
+              Panchayat and terrain context automatically.
+            </p>
+          </div>
+        </div>
+
+        {/* 3-step guide — uses same Card + border + rounded language */}
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+          <EmptyStepCard
+            number={1}
+            icon={<MapPin className="h-5 w-5" />}
+            title="Select a site"
+            description="Click anywhere on the map or use your current location. The GIS layer resolves State → District → Block → Panchayat."
+          />
+          <EmptyStepCard
+            number={2}
+            icon={<Sliders className="h-5 w-5" />}
+            title="Configure the asset"
+            description="Enter DC capacity, tilt, and azimuth for solar — or hub height, rotor diameter, and turbine count for wind."
+          />
+          <EmptyStepCard
+            number={3}
+            icon={<Zap className="h-5 w-5" />}
+            title="Get the forecast"
+            description="72-hour MW prediction with P10/P90 uncertainty bands, plus surplus/shortfall recommendations."
+          />
+        </div>
+
+        {/* CTA */}
+        <div className="flex flex-col items-center gap-3 pt-2">
+          <Button
+            onClick={() => navigate('/map')}
+            className="group flex items-center gap-2 bg-emerald-600 px-7 py-3.5 text-base font-semibold text-white shadow-lg shadow-emerald-600/25 hover:bg-emerald-700"
+          >
+            Configure your first site
+            <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
+          </Button>
+          <p className="text-xs text-slate-400">
+            Gujarat pilot region · 72-hour forecast horizon · Physics + ML
+          </p>
+        </div>
+      </PageWrapper>
+    )
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // NORMAL DASHBOARD — site is configured.
+  // Everything below is unchanged from the previous version.
+  // ════════════════════════════════════════════════════════════════
   return (
     <PageWrapper className="space-y-5">
       {/* ── Compact header + current-site strip, combined into one
@@ -213,5 +291,38 @@ export default function Dashboard() {
 
       <AlertsFeed alerts={alerts} isLoading={alertsLoading} />
     </PageWrapper>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Small helper component for the 3-step guide in the empty state.
+// Only used inside this file.
+// ════════════════════════════════════════════════════════════════════
+function EmptyStepCard({
+  number,
+  icon,
+  title,
+  description,
+}: {
+  number: number
+  icon: React.ReactNode
+  title: string
+  description: string
+}) {
+  return (
+    <Card className="rounded-3xl">
+      <div className="mb-4 flex items-center gap-3">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-600 text-sm font-bold text-white">
+          {number}
+        </div>
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+          {icon}
+        </div>
+      </div>
+      <h3 className="mb-2 text-base font-semibold tracking-tight text-slate-900">
+        {title}
+      </h3>
+      <p className="text-sm leading-relaxed text-slate-600">{description}</p>
+    </Card>
   )
 }
