@@ -15,7 +15,7 @@ export function SignupForm() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [team, setTeam] = useState('HEXABYTE')
+  const [team, setTeam] = useState('')
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
@@ -26,7 +26,7 @@ export function SignupForm() {
         name,
         email,
         password,
-        team,
+        team: team || 'HEXABYTE',   // default to HEXABYTE if user leaves blank
       })
       authLogin(res.data.token, res.data.user)
       showToast('Account created', 'success')
@@ -71,7 +71,7 @@ export function SignupForm() {
       />
       <Input
         label="Team / Organization"
-        placeholder="Energy Plant"
+        placeholder="HEXABYTE"
         value={team}
         onChange={(e) => setTeam(e.target.value)}
       />

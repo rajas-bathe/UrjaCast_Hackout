@@ -33,15 +33,7 @@ export default function Landing() {
         </nav>
 
         {/* HEADLINE OVERLAY */}
-        <div className="relative z-10 flex h-full flex-col items-center px-6 pt-24 text-center md:pt-32">
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-slate-200/70 bg-white/70 px-4 py-1.5 text-xs font-medium text-slate-700 backdrop-blur-sm">
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            </span>
-            HackOut 2026 · Phase 2 Live Demo
-          </div>
-
+        <div className="relative z-10 flex h-full flex-col items-center justify-center px-6 text-center">
           <h1 className="mx-auto max-w-5xl text-5xl font-extrabold leading-[1.03] tracking-[-0.03em] text-slate-900 md:text-7xl">
             Renewable energy,
             <br />
@@ -56,7 +48,6 @@ export default function Landing() {
           </p>
 
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            {/* FIXED: goes to /login */}
             <button
               onClick={() => navigate('/login')}
               className="group inline-flex items-center gap-2 rounded-full bg-emerald-600 px-7 py-3.5 text-base font-semibold text-white shadow-lg shadow-emerald-600/30 transition hover:bg-emerald-700 hover:shadow-xl hover:shadow-emerald-600/40"
@@ -146,7 +137,7 @@ export default function Landing() {
       <footer className="border-t border-slate-100 px-8 py-8 md:px-14">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 text-sm text-slate-500 md:flex-row">
           <div>UrjaCast · Team Sa.Ta.Ra · HackOut 2026</div>
-          <div> Sarthak Agiwale · Tanmay Agrawal · Rajas Bathe</div>
+          <div>Sarthak Agiwale · Tanmay Agrawal · Rajas Bathe</div>
         </div>
       </footer>
     </div>
