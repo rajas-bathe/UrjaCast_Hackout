@@ -7,10 +7,28 @@ class OperatingRequirement(BaseModel):
     loadRequirementMW: float = 10.0
 
 
+class StorageConfig(BaseModel):
+    availableMWh: float = 25.0
+    maxChargeMW: float = 20.0
+    maxDischargeMW: float = 20.0
+
+
+class FlexibleLoad(BaseModel):
+    shiftableMW: float = 5.0
+
+
+class BackupConfig(BaseModel):
+    capacityMW: float = 8.0
+
+
 class DecisionRequest(BaseModel):
     siteId: str
     forecast: Optional[dict] = None
     operatingRequirement: OperatingRequirement = OperatingRequirement()
+    storage: StorageConfig = StorageConfig()
+    flexibleLoad: FlexibleLoad = FlexibleLoad()
+    backup: BackupConfig = BackupConfig()
+    assetType: str = "solar"
 
 
 class Recommendation(BaseModel):
@@ -19,6 +37,8 @@ class Recommendation(BaseModel):
     status: str
     action: str
     reason: str
+    cause: str = "demand"
+    factors: list[str] = []
     numbers: dict
 
 

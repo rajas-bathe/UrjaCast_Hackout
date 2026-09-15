@@ -18,10 +18,13 @@ export default function DecisionPanel() {
   const forecast = useForecastStore((s) => s.forecast)
   const decision = useForecastStore((s) => s.decision)
   const setDecision = useForecastStore((s) => s.setDecision)
+
   const operatingRequirement = useForecastStore((s) => s.operatingRequirement)
   const storage = useForecastStore((s) => s.storage)
   const flexibleLoad = useForecastStore((s) => s.flexibleLoad)
   const backup = useForecastStore((s) => s.backup)
+
+  const setOperatingRequirement = useForecastStore((s) => s.setOperatingRequirement)
   const setStorage = useForecastStore((s) => s.setStorage)
   const setFlexibleLoad = useForecastStore((s) => s.setFlexibleLoad)
   const setBackup = useForecastStore((s) => s.setBackup)
@@ -40,40 +43,44 @@ export default function DecisionPanel() {
         backup,
       })
       .then((result) => setDecision(result))
-      .catch(() => showToast('Failed to compute decision. Showing last known state.', 'error'))
+      .catch(() =>
+        showToast('Failed to compute decision. Showing last known state.', 'error'),
+      )
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forecast, storage, flexibleLoad, backup, operatingRequirement])
 
   if (!forecast) {
     return (
       <PageWrapper>
-          <EmptyState
-            title="No forecast available"
-            description="Run a forecast first so the decision engine has data to evaluate."
-            actionLabel="Go to Map View"
-            onAction={() => navigate('/map')}
-          />
-        </PageWrapper>
+        <EmptyState
+          title="No forecast available"
+          description="Run a forecast first so the decision engine has data to evaluate."
+          actionLabel="Go to Map View"
+          onAction={() => navigate('/map')}
+        />
+      </PageWrapper>
     )
   }
 
   return (
     <PageWrapper>
-        <StatusIndicator decision={decision} />
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
-          <div className="space-y-6">
-            <RecommendedActionsList recommendations={decision?.recommendations || []} />
-            <DecisionTimeline timeline={decision?.timeline || []} />
-          </div>
-          <ManualOverrideSliders
-            storage={storage}
-            flexibleLoad={flexibleLoad}
-            backup={backup}
-            onStorageChange={setStorage}
-            onFlexibleLoadChange={setFlexibleLoad}
-            onBackupChange={setBackup}
-          />
+      <StatusIndicator decision={decision} />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
+        <div className="space-y-6">
+          <RecommendedActionsList recommendations={decision?.recommendations || []} />
+          <DecisionTimeline timeline={decision?.timeline || []} />
         </div>
-      </PageWrapper>
+        <ManualOverrideSliders
+          operatingRequirement={operatingRequirement}
+          storage={storage}
+          flexibleLoad={flexibleLoad}
+          backup={backup}
+          onOperatingRequirementChange={setOperatingRequirement}
+          onStorageChange={setStorage}
+          onFlexibleLoadChange={setFlexibleLoad}
+          onBackupChange={setBackup}
+        />
+      </div>
+    </PageWrapper>
   )
 }

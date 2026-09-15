@@ -131,15 +131,15 @@ export interface CurrentWeather {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Forecast — UPDATED with new provenance tags + weather fields
+// Forecast
 // ─────────────────────────────────────────────────────────────────────
 export type ForecastModelTag =
   | 'pvlib'
   | 'xgboost'
   | 'power-curve'
   | 'ml-correction'
-  | 'log-law'            // ← ADDED (wind shear)
-  | 'density-corrected'  // ← ADDED (air density)
+  | 'log-law'
+  | 'density-corrected'
   | 'fallback'
 
 export interface HourlyForecast {
@@ -149,8 +149,8 @@ export interface HourlyForecast {
   p90MW: number
   status: 'normal' | 'surplus' | 'shortfall'
   provenance: ForecastModelTag[]
-  ghi?: number | null         // ← ADDED (W/m²) — solar tab
-  wind_speed?: number | null  // ← ADDED (m/s) — wind tab
+  ghi?: number | null
+  wind_speed?: number | null
 }
 
 export interface ForecastSummary {
@@ -207,15 +207,29 @@ export interface DecisionRequest {
   storage: StorageConfig
   flexibleLoad: FlexibleLoadConfig
   backup: BackupConfig
+  assetType?: 'solar' | 'wind'
 }
 
 export type RecommendationAction =
   | 'charge-storage'
   | 'shift-load'
-  | 'prepare-discharge'
-  | 'activate-backup'
+  | 'sell-to-grid'
+  | 'pre-cool'
+  | 'hydrogen'
+  | 'notify-grid'
   | 'curtail'
+  | 'prepare-discharge'
+  | 'defer-load'
+  | 'activate-backup'
+  | 'buy-spot'
+  | 'shed-load'
   | 'normal-operation'
+
+export type RecommendationCause =
+  | 'weather'
+  | 'demand'
+  | 'grid'
+  | 'equipment'
 
 export interface Recommendation {
   windowStart: string
@@ -223,6 +237,8 @@ export interface Recommendation {
   status: 'surplus' | 'shortfall' | 'normal'
   action: RecommendationAction
   reason: string
+  cause?: RecommendationCause
+  factors?: string[]
   numbers: {
     forecastMW: number
     thresholdMW: number
@@ -253,6 +269,12 @@ export interface MetricsResponse {
   mae: number | null
   rmse: number | null
   normalizedMae: number | null
+  r2?: number | null
+  baseline?: {
+    mae: number | null
+    rmse: number | null
+    r2?: number | null
+  }
   byLeadTime: {
     h24: LeadTimeMetric
     h48: LeadTimeMetric
@@ -260,6 +282,7 @@ export interface MetricsResponse {
   }
   validationStatus: 'pending' | 'complete'
   note: string
+  trainedAt?: string | null
 }
 
 // ─────────────────────────────────────────────────────────────────────

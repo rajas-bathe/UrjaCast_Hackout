@@ -24,6 +24,8 @@ interface KPICardsProps {
   decision: DecisionResponse | null
   /** Optional explicit override. If unset, auto-detected from forecast data. */
   assetType?: 'solar' | 'wind'
+  /** Display label for the Current Weather card title. */
+  locationLabel?: string
 }
 
 export function KPICards({
@@ -32,6 +34,7 @@ export function KPICards({
   forecast,
   decision,
   assetType,
+  locationLabel = 'Gujarat',
 }: KPICardsProps) {
   // ─── 24h totals ─────────────────────────────────────────────
   const solar24 = forecast?.solar
@@ -42,10 +45,6 @@ export function KPICards({
     : 0
 
   // ─── Resolve which asset type to display ────────────────────
-  // Priority:
-  //   1. Explicit assetType prop (from Dashboard)
-  //   2. Auto-detect from forecast data (if wind > 0 → wind, else if solar > 0 → solar)
-  //   3. Fallback to "both"
   let effectiveAsset: 'solar' | 'wind' | 'both' = 'both'
 
   if (assetType) {
@@ -61,7 +60,6 @@ export function KPICards({
     } else if (solarNonZero && !windNonZero) {
       effectiveAsset = 'solar'
     } else if (windNonZero && solarNonZero) {
-      // Both have real data — show both
       effectiveAsset = 'both'
     } else if (hasWindData && !hasSolarData) {
       effectiveAsset = 'wind'
@@ -87,7 +85,7 @@ export function KPICards({
       {/* ── Card 1: Current Weather ─────────────────────────── */}
       <Card>
         <CardHeader>
-          <CardTitle>Current Weather (Gujarat)</CardTitle>
+          <CardTitle>Current Weather ({locationLabel})</CardTitle>
           <DataProvenanceBadge type="model-derived" />
         </CardHeader>
 

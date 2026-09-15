@@ -34,13 +34,11 @@ export default function Dashboard() {
       : 'solar'
     : undefined
 
-  // Next-few-hours series for the short-horizon card — purely derived from
   // existing forecast store data, no new fetching/state.
   const shortHorizon = (forecast?.combined ?? forecast?.solar ?? forecast?.wind ?? []).slice(0, 6)
 
   // ════════════════════════════════════════════════════════════════
   // EMPTY STATE — shown on first login or when no site is selected.
-  // Compact layout — fits in one viewport without scrolling.
   // ════════════════════════════════════════════════════════════════
   if (!selectedSite) {
     return (
@@ -115,14 +113,9 @@ export default function Dashboard() {
   }
 
   // ════════════════════════════════════════════════════════════════
-  // NORMAL DASHBOARD — site is configured.
-  // Everything below is unchanged from the previous version.
   // ════════════════════════════════════════════════════════════════
   return (
     <PageWrapper className="space-y-5">
-      {/* ── Compact header + current-site strip, combined into one
-             band so the page reads as one dense row instead of two
-             tall stacked cards. ─────────────────────────────────── */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-50 via-white to-amber-50/30 border border-slate-200/80 px-5 py-4 md:px-7 md:py-5">
         <svg
           className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 opacity-30"
@@ -217,10 +210,16 @@ export default function Dashboard() {
         forecast={forecast}
         decision={decision}
         assetType={assetType}
+        locationLabel={
+          selectedSite
+            ? selectedSite.gis.panchayat
+              ? `${selectedSite.gis.panchayat}, ${selectedSite.gis.block}`
+              : selectedSite.gis.block || selectedSite.gis.district || 'Gujarat'
+            : 'Gujarat'
+        }
       />
 
-      {/* ── Next few hours + Quick actions side by side so more
-             of the page's features are visible without scrolling. */}
+      {/* ── Next few hours + Quick actions side by side  */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         <Card className="rounded-3xl lg:col-span-2">
           <div className="mb-4 flex items-center justify-between">

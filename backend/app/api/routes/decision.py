@@ -11,4 +11,20 @@ def run(payload: DecisionRequest):
     hours = fc.get("solar") or fc.get("wind") or fc.get("combined") or []
     if not hours:
         return {"status": "normal", "recommendations": [], "timeline": []}
-    return decision_service.run_decision(hours, payload.operatingRequirement.exportLimitMW, payload.operatingRequirement.loadRequirementMW)
+
+    weather_hours = fc.get("weather")
+    asset_type = getattr(payload, "assetType", "solar")
+    storage_mwh = (
+        payload.storage.availableMWh
+        if getattr(payload, "storage", None)
+        else 25.0
+    )
+
+    return decision_service.run_decision(
+        hours,
+        export_limit=payload.operatingRequirement.exportLimitMW,
+        load_req=payload.operatingRequirement.loadRequirementMW,
+        asset_type=asset_type,
+        weather_hours=weather_hours,
+        storage_available_mwh=storage_mwh,
+    )

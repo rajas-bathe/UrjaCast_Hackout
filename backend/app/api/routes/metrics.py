@@ -1,10 +1,22 @@
-﻿from fastapi import APIRouter
+﻿import json
+from pathlib import Path
+
+from fastapi import APIRouter
 
 router = APIRouter(prefix="/api/metrics", tags=["metrics"])
+
+METRICS_PATH = Path("data/models/solar_metrics.json")
 
 
 @router.get("")
 def metrics():
+    if METRICS_PATH.exists():
+        try:
+            with open(METRICS_PATH, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+
     return {
         "mae": None,
         "rmse": None,
