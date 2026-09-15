@@ -20,6 +20,15 @@ SHORTFALL_ACTIONS = [
     ("shed-load",          "Shed non-essential flexible load — last resort"),
 ]
 
+# ── Noise thresholds ─────────────────────────────────────────────────
+# A shortfall hour is only "real" if the deficit is meaningfully large.
+MIN_DELTA_MW = 2.0           # absolute MW threshold
+MIN_DELTA_FRACTION = 0.20    # or 20% of load requirement
+
+# Overall status is only "shortfall"/"surplus" if a meaningful
+# fraction of the 72h horizon is affected.
+MIN_AFFECTED_FRACTION = 0.15  # 15% of hours
+
 
 def _weather_factors(hour_weather, asset_type):
     if not hour_weather:
@@ -71,7 +80,6 @@ def _dedupe_factors(factor_lists):
     for fl in factor_lists:
         for f in fl:
             counts[f] += 1
-    # Sort by frequency, then alphabetically
     return [f for f, _ in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))]
 
 
@@ -86,10 +94,21 @@ def _pick_action(status, index_in_day, storage_available):
     return ladder[index_in_day % len(ladder)]
 
 
+def _is_meaningful_shortfall(mw, load_req):
+    """A shortfall hour counts only if the deficit is significant."""
+    if mw >= load_req:
+        return False
+    delta = load_req - mw
+    return (delta >= MIN_DELTA_MW) or (delta >= MIN_DELTA_FRACTION * load_req)
+
+
 def _classify_hours(hours, export_limit, load_req):
     """
-    Return per-hour status: 'normal' | 'surplus' | 'shortfall'.
-    Shortfall only flagged during productive hours (peak * 0.15).
+    Per-hour status: 'normal' | 'surplus' | 'shortfall'.
+
+    Shortfall rules:
+      - Only during productive hours (> 15% of peak MW)
+      - Only if the deficit is meaningful (MIN_DELTA_MW or MIN_DELTA_FRACTION)
     """
     mw_values = [float(h["expectedMW"]) for h in hours]
     peak_mw = max(mw_values) if mw_values else 0.0
@@ -100,7 +119,7 @@ def _classify_hours(hours, export_limit, load_req):
         mw = float(h["expectedMW"])
         if mw > export_limit:
             status = "surplus"
-        elif mw > productive_threshold and mw < load_req:
+        elif mw > productive_threshold and _is_meaningful_shortfall(mw, load_req):
             status = "shortfall"
         else:
             status = "normal"
@@ -150,7 +169,6 @@ def run_decision(
     if not hours:
         return {"status": "normal", "recommendations": [], "timeline": []}
 
-    # Sort to guarantee chronological grouping
     hours = sorted(hours, key=lambda h: h["time"])
     weather_by_time = {w["time"]: w for w in (weather_hours or [])}
 
@@ -159,35 +177,43 @@ def run_decision(
 
     timeline = [{"time": h["time"], "status": h["_status"]} for h in classified]
 
+    total_hours = len(classified)
     surplus_count = sum(1 for h in classified if h["_status"] == "surplus")
     shortfall_count = sum(1 for h in classified if h["_status"] == "shortfall")
 
-    # Pick overall status
-    if surplus_count and shortfall_count:
+    # Overall status — only declare a flag if a meaningful fraction of
+    # the horizon is affected. Otherwise "normal".
+    surplus_significant = (
+        surplus_count / total_hours >= MIN_AFFECTED_FRACTION
+        if total_hours else False
+    )
+    shortfall_significant = (
+        shortfall_count / total_hours >= MIN_AFFECTED_FRACTION
+        if total_hours else False
+    )
+
+    if surplus_significant and shortfall_significant:
         overall = "shortfall" if shortfall_count >= surplus_count else "surplus"
-    elif surplus_count:
+    elif surplus_significant:
         overall = "surplus"
-    elif shortfall_count:
+    elif shortfall_significant:
         overall = "shortfall"
     else:
         overall = "normal"
 
-    # Day index — used to rotate actions so we don't repeat
     day_counters = defaultdict(int)
-
     recommendations = []
+
     for group in groups:
         status = group["status"]
         group_hours = group["hours"]
 
-        # Day key — YYYY-MM-DD
         day_key = group["start"][:10]
         idx = day_counters[day_key]
         day_counters[day_key] += 1
 
         action, action_label = _pick_action(status, idx, storage_available_mwh)
 
-        # Aggregate numbers across the group
         mws = [h["_mw"] for h in group_hours]
         peak = max(mws)
         avg = sum(mws) / len(mws)
@@ -207,14 +233,12 @@ def run_decision(
                 f"by {delta:.1f} MW across {len(group_hours)} hour(s)"
             )
 
-        # Merge weather factors from all hours in the group
         factor_lists = [
             _weather_factors(weather_by_time.get(h["time"]), asset_type)
             for h in group_hours
         ]
         factors = _dedupe_factors([fl for fl in factor_lists if fl])
 
-        # Window end = last hour + 1h
         end = (
             datetime.fromisoformat(group["end"].replace("Z", "+00:00"))
             + timedelta(hours=1)

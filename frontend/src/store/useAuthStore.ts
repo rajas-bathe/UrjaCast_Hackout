@@ -15,7 +15,7 @@ const DEMO_USER: AuthUser = {
   id: 'demo-user',
   name: 'Demo User',
   email: 'demo@urjacast.local',
-  team: 'HEXABYTE',
+  team: 'Power Plant',
 }
 
 export const useAuthStore = create<AuthState>()(

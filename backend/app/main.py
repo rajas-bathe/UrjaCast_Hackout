@@ -36,6 +36,7 @@ app.include_router(decision.router)
 app.include_router(metrics.router)
 app.include_router(alerts.router)
 app.include_router(gis.router)
+app.include_router(reports.router)   # ← ADDED THIS LINE
 
 
 # ─── Health ────────────────────────────────────────────────────────────

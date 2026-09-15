@@ -37,8 +37,12 @@ export function useHistoricalPerformance(siteId: string | null) {
   return useQuery({
     queryKey: ['historical-performance', siteId],
     queryFn: async () => {
-      const { data } = await api.get(ENDPOINTS.historicalPerformance, { params: { siteId } })
-      return data
+      const { data } = await api.get(ENDPOINTS.historicalPerformance, {
+        params: { siteId },
+      })
+      // Backend returns { points: [], validationStatus, note, ... }
+      // Chart component expects a plain array — unwrap it here.
+      return data?.points ?? []
     },
     enabled: !!siteId,
   })

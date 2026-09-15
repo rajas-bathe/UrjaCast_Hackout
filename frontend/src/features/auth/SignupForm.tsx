@@ -71,7 +71,7 @@ export function SignupForm() {
       />
       <Input
         label="Team / Organization"
-        placeholder="HEXABYTE"
+        placeholder="Power Plant"
         value={team}
         onChange={(e) => setTeam(e.target.value)}
       />
