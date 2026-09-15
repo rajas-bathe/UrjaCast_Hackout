@@ -48,7 +48,7 @@ export function SignupForm() {
     <form onSubmit={handleSubmit} className="space-y-4">
       <Input
         label="Full Name"
-        placeholder="Rajas Bathe"
+        placeholder="John Doe"
         value={name}
         onChange={(e) => setName(e.target.value)}
         required
@@ -71,7 +71,7 @@ export function SignupForm() {
       />
       <Input
         label="Team / Organization"
-        placeholder="HEXABYTE"
+        placeholder="Energy Plant"
         value={team}
         onChange={(e) => setTeam(e.target.value)}
       />
