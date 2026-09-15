@@ -27,3 +27,13 @@ api.interceptors.response.use(
     return Promise.reject(err)
   }
 )
+
+/**
+ * Legacy compatibility shim.
+ *
+ * The app no longer supports a mock backend — all data comes from the
+ * live FastAPI service. This stub exists only so legacy components
+ * (e.g. Header.tsx) that still check isMockEnabled() continue to compile.
+ * Always returns false.
+ */
+export const isMockEnabled = (): boolean => false
