@@ -1,5 +1,3 @@
 *.zip
-.env
-.env.example
 *.pyc
 *.pyo
