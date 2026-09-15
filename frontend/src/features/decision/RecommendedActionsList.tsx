@@ -14,6 +14,7 @@ import {
   Zap,
   Layers,
   Snowflake,
+  type LucideIcon,
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
 import { EmptyState } from '@/components/common/EmptyState'
@@ -26,7 +27,7 @@ interface RecommendedActionsListProps {
 }
 
 interface ActionMeta {
-  icon: React.ComponentType<{ className?: string; size?: number }>
+  icon: LucideIcon
   label: string
   tone: 'surplus' | 'shortfall' | 'neutral'
 }
