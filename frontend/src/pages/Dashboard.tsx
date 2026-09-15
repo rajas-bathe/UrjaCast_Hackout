@@ -40,71 +40,73 @@ export default function Dashboard() {
 
   // ════════════════════════════════════════════════════════════════
   // EMPTY STATE — shown on first login or when no site is selected.
-  // Does not affect the normal dashboard below.
+  // Compact layout — fits in one viewport without scrolling.
   // ════════════════════════════════════════════════════════════════
   if (!selectedSite) {
     return (
-      <PageWrapper className="space-y-5">
-        {/* Hero band — same rounded-3xl + gradient language as the header */}
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-50 via-white to-amber-50/30 border border-slate-200/80 px-6 py-10 md:px-10 md:py-14">
+      <PageWrapper className="space-y-3">
+        {/* Compact hero band */}
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-50 via-white to-amber-50/30 border border-slate-200/80 px-5 py-5">
           <svg
-            className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 opacity-25"
+            className="pointer-events-none absolute -right-8 -top-8 h-28 w-28 opacity-25"
             viewBox="0 0 200 200"
             aria-hidden="true"
           >
             <circle cx="100" cy="100" r="100" fill="#FCD34D" opacity="0.35" />
           </svg>
 
-          <div className="relative z-10 mx-auto max-w-2xl text-center">
-            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-600 shadow-lg shadow-emerald-600/25">
-              <Zap className="h-8 w-8 text-white" />
+          <div className="relative z-10 flex items-center gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-600 shadow-md shadow-emerald-600/25">
+              <Zap className="h-5 w-5 text-white" />
             </div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-emerald-600">
-              Welcome to UrjaCast
-            </p>
-            <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-900 md:text-4xl">
-              Configure your first site
-            </h1>
-            <p className="mx-auto mt-4 max-w-xl text-base text-slate-600">
-              Forecast renewable generation at any site in Gujarat. Start by
-              selecting a location on the map — we'll resolve it to its
-              Panchayat and terrain context automatically.
-            </p>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-600">
+                Welcome to UrjaCast
+              </p>
+              <h1 className="mt-0.5 text-xl font-bold tracking-tight text-slate-900">
+                Configure your first site
+              </h1>
+              <p className="mt-1 text-sm leading-snug text-slate-600">
+                Forecast renewable generation at any site in Gujarat. Select a
+                location on the map — we'll resolve its Panchayat and terrain
+                context automatically.
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* 3-step guide — uses same Card + border + rounded language */}
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
-          <EmptyStepCard
+        {/* Compact 3-step grid */}
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <CompactStepCard
             number={1}
-            icon={<MapPin className="h-5 w-5" />}
+            icon={<MapPin className="h-4 w-4" />}
             title="Select a site"
-            description="Click anywhere on the map or use your current location. The GIS layer resolves State → District → Block → Panchayat."
+            description="Click anywhere on the map. The GIS layer resolves State → District → Block → Panchayat."
           />
-          <EmptyStepCard
+          <CompactStepCard
             number={2}
-            icon={<Sliders className="h-5 w-5" />}
+            icon={<Sliders className="h-4 w-4" />}
             title="Configure the asset"
-            description="Enter DC capacity, tilt, and azimuth for solar — or hub height, rotor diameter, and turbine count for wind."
+            description="Enter DC capacity, tilt, and azimuth for solar — or turbine specs for wind."
           />
-          <EmptyStepCard
+          <CompactStepCard
             number={3}
-            icon={<Zap className="h-5 w-5" />}
+            icon={<Zap className="h-4 w-4" />}
             title="Get the forecast"
-            description="72-hour MW prediction with P10/P90 uncertainty bands, plus surplus/shortfall recommendations."
+            description="72-hour MW prediction with P10/P90 bands and surplus/shortfall recommendations."
           />
         </div>
 
-        {/* CTA */}
-        <div className="flex flex-col items-center gap-3 pt-2">
+        {/* CTA — inline, compact */}
+        <div className="flex flex-col items-center gap-2 pt-1">
           <Button
             onClick={() => navigate('/map')}
-            className="group flex items-center gap-2 bg-emerald-600 px-7 py-3.5 text-base font-semibold text-white shadow-lg shadow-emerald-600/25 hover:bg-emerald-700"
+            className="group flex items-center gap-2 bg-emerald-600 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/25 hover:bg-emerald-700"
           >
             Configure your first site
-            <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
+            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
           </Button>
-          <p className="text-xs text-slate-400">
+          <p className="text-[11px] text-slate-400">
             Gujarat pilot region · 72-hour forecast horizon · Physics + ML
           </p>
         </div>
@@ -295,10 +297,9 @@ export default function Dashboard() {
 }
 
 // ════════════════════════════════════════════════════════════════════
-// Small helper component for the 3-step guide in the empty state.
-// Only used inside this file.
+// Compact step card — used only in the empty state.
 // ════════════════════════════════════════════════════════════════════
-function EmptyStepCard({
+function CompactStepCard({
   number,
   icon,
   title,
@@ -310,19 +311,19 @@ function EmptyStepCard({
   description: string
 }) {
   return (
-    <Card className="rounded-3xl">
-      <div className="mb-4 flex items-center gap-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-600 text-sm font-bold text-white">
+    <Card className="rounded-2xl">
+      <div className="mb-2.5 flex items-center gap-2">
+        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-xs font-bold text-white">
           {number}
         </div>
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
           {icon}
         </div>
       </div>
-      <h3 className="mb-2 text-base font-semibold tracking-tight text-slate-900">
+      <h3 className="mb-1 text-sm font-semibold tracking-tight text-slate-900">
         {title}
       </h3>
-      <p className="text-sm leading-relaxed text-slate-600">{description}</p>
+      <p className="text-xs leading-snug text-slate-600">{description}</p>
     </Card>
   )
 }
