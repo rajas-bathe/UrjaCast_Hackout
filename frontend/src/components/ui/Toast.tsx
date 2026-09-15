@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { CheckCircle2, XCircle, Info, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -52,28 +53,31 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            className={cn(
-              'flex items-center gap-2 rounded-xl border bg-white px-4 py-3 shadow-lg text-sm text-slate-700 min-w-[260px]',
-              borderMap[t.type],
-            )}
-            role="status"
-          >
-            {iconMap[t.type]}
-            <span className="flex-1">{t.message}</span>
-            <button
-              aria-label="Dismiss notification"
-              onClick={() => dismiss(t.id)}
-              className="text-slate-400 hover:text-slate-600"
+      {createPortal(
+        <div className="pointer-events-none fixed bottom-4 right-4 z-[9999] flex flex-col gap-2">
+          {toasts.map((t) => (
+            <div
+              key={t.id}
+              className={cn(
+                'pointer-events-auto flex items-center gap-2 rounded-xl border bg-white px-4 py-3 shadow-lg text-sm text-slate-700 min-w-[260px]',
+                borderMap[t.type],
+              )}
+              role="status"
             >
-              <X size={14} />
-            </button>
-          </div>
-        ))}
-      </div>
+              {iconMap[t.type]}
+              <span className="flex-1">{t.message}</span>
+              <button
+                aria-label="Dismiss notification"
+                onClick={() => dismiss(t.id)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ))}
+        </div>,
+        document.body,
+      )}
     </ToastContext.Provider>
   )
 }
