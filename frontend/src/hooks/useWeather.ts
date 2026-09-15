@@ -16,15 +16,17 @@ export function useWeather(lat: number | null, lon: number | null, hours = 72) {
   })
 }
 
-export function useCurrentWeather(lat: number | null, lon: number | null) {
+export function useCurrentWeather(lat: number, lon: number) {
   return useQuery({
     queryKey: ['weather-current', lat, lon],
     queryFn: async () => {
-      const { data } = await api.get<CurrentWeather>(ENDPOINTS.weatherCurrent, {
+      const { data } = await api.get(ENDPOINTS.weatherCurrent, {
         params: { lat, lon },
       })
       return data
     },
-    enabled: lat !== null && lon !== null,
+    enabled: Number.isFinite(lat) && Number.isFinite(lon),  // ← ADD
+    staleTime: 10 * 60 * 1000,                              // 10 min — ADD
+    refetchOnWindowFocus: false,                            // ← ADD
   })
 }
