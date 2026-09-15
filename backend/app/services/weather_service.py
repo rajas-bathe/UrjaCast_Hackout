@@ -5,6 +5,7 @@ Fetches weather + elevation from Open-Meteo with:
   - 15-minute in-memory cache
   - Retry with exponential backoff on 429
   - Graceful fallback to realistic mock data
+  - UTC-normalized ISO timestamps (all times end with 'Z')
 """
 
 from datetime import datetime, timedelta
@@ -34,6 +35,35 @@ def _get_cached(key: str):
 
 def _set_cached(key: str, value) -> None:
     _cache[key] = (value, datetime.utcnow() + CACHE_TTL)
+
+
+# ─── UTC time normalization ─────────────────────────────────────────────
+
+def _ensure_utc_iso(t: str) -> str:
+    """
+    Ensure a time string ends with a UTC marker 'Z'.
+    Open-Meteo returns 'YYYY-MM-DDTHH:MM' (16 chars, no seconds).
+    We pad to 'YYYY-MM-DDTHH:MM:SSZ' for standard ISO 8601 so the
+    frontend parses every timestamp as UTC, not as browser-local time.
+    """
+    if not t:
+        return t
+    if t.endswith("Z"):
+        return t
+    if len(t) == 16:  # 'YYYY-MM-DDTHH:MM'
+        t = t + ":00"
+    return t + "Z"
+
+
+def _normalize_hourly_times(data: dict) -> dict:
+    """Add Z suffix to every entry in data['hourly']['time']."""
+    try:
+        times = data.get("hourly", {}).get("time")
+        if isinstance(times, list):
+            data["hourly"]["time"] = [_ensure_utc_iso(t) for t in times]
+    except Exception:
+        pass
+    return data
 
 
 # ─── Mock fallbacks ─────────────────────────────────────────────────────
@@ -156,6 +186,10 @@ async def fetch_forecast(lat: float, lon: float, hours: int = 72) -> dict:
         lambda: _mock_forecast(lat, lon, hours),
         label="forecast",
     )
+
+    # ── Normalize every time to UTC (ends with 'Z') before caching ──
+    data = _normalize_hourly_times(data)
+
     _set_cached(key, data)
     return data
 

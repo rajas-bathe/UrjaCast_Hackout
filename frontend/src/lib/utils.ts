@@ -20,14 +20,47 @@ export function formatPct(value: number | null | undefined, digits = 0): string 
   return `${value.toFixed(digits)}%`
 }
 
+/**
+ * Ensure an ISO timestamp is parsed as UTC.
+ * Open-Meteo + FastAPI return strings like "2026-09-15T08:00"
+ * with no timezone marker — JS would otherwise treat them as
+ * browser-local time. We append "Z" to force UTC interpretation.
+ */
+function parseAsUTC(iso: string): Date | null {
+  if (!iso) return null
+  // Already has Z or explicit ±HH:MM offset — parse as-is
+  const hasTz = /[Zz]$/.test(iso) || /[+-]\d{2}:?\d{2}$/.test(iso)
+  const safe = hasTz ? iso : iso + 'Z'
+  const d = new Date(safe)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+/**
+ * Format an ISO UTC timestamp as "H:MM AM/PM" in India Standard Time.
+ * Used across the Forecast chart, Hourly table, Decision timeline,
+ * and anywhere a time label is displayed.
+ */
 export function formatHourLabel(iso: string): string {
-  const d = new Date(iso)
-  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+  const d = parseAsUTC(iso)
+  if (!d) return iso
+  return d.toLocaleTimeString('en-IN', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: 'Asia/Kolkata',
+  })
 }
 
 export function formatDayHourLabel(iso: string): string {
-  const d = new Date(iso)
-  return d.toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' })
+  const d = parseAsUTC(iso)
+  if (!d) return iso
+  return d.toLocaleString('en-IN', {
+    weekday: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: 'Asia/Kolkata',
+  })
 }
 
 export function statusColor(status: 'normal' | 'surplus' | 'shortfall'): string {
