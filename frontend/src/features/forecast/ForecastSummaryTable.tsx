@@ -7,12 +7,43 @@ interface ForecastSummaryTableProps {
   summary: ForecastSummary
 }
 
+interface Row {
+  label: string
+  value: string
+  sub?: string
+}
+
 export function ForecastSummaryTable({ summary }: ForecastSummaryTableProps) {
-  const rows = [
-    { label: 'Peak Generation', value: formatMW(summary.peakMW) },
-    { label: 'Average Generation', value: formatMW(summary.avgMW) },
-    { label: 'Total (24h)', value: formatMWh(summary.total24hMWh) },
-    { label: 'Total (72h)', value: formatMWh(summary.total72hMWh) },
+  const { peakMW, avgMW, total24hMWh, total72hMWh } = summary
+
+  // Derive both averages from totals so labels are always accurate.
+  // Falls back to backend avgMW if totals are missing.
+  const avg24h = total24hMWh ? total24hMWh / 24 : undefined
+  const avg72h = total72hMWh ? total72hMWh / 72 : avgMW
+
+  const rows: Row[] = [
+    {
+      label: 'Peak Generation',
+      value: formatMW(peakMW),
+    },
+    {
+      label: 'Avg. Generation (24h)',
+      value: avg24h != null ? formatMW(avg24h) : '—',
+      sub: avg24h != null ? `across ${24} hours` : undefined,
+    },
+    {
+      label: 'Total Generation (24h)',
+      value: formatMWh(total24hMWh),
+    },
+    {
+      label: 'Avg. Generation (72h)',
+      value: avg72h != null ? formatMW(avg72h) : '—',
+      sub: avg72h != null ? `across ${72} hours` : undefined,
+    },
+    {
+      label: 'Total Generation (72h)',
+      value: formatMWh(total72hMWh),
+    },
   ]
 
   return (
@@ -20,16 +51,24 @@ export function ForecastSummaryTable({ summary }: ForecastSummaryTableProps) {
       <CardHeader>
         <CardTitle>Forecast Summary</CardTitle>
       </CardHeader>
-      <table className="w-full text-sm">
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.label} className="border-b border-slate-100 last:border-0">
-              <td className="py-2 text-slate-500">{row.label}</td>
-              <td className="py-2 text-right font-semibold text-slate-900">{row.value}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="divide-y divide-slate-100">
+        {rows.map((row) => (
+          <div
+            key={row.label}
+            className="flex items-center justify-between py-3 first:pt-0 last:pb-0"
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-slate-700">{row.label}</p>
+              {row.sub && (
+                <p className="text-[11px] text-slate-400">{row.sub}</p>
+              )}
+            </div>
+            <p className="text-base font-semibold text-slate-900 tabular-nums">
+              {row.value}
+            </p>
+          </div>
+        ))}
+      </div>
     </Card>
   )
 }
