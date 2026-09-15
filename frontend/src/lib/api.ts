@@ -1,31 +1,29 @@
 import axios from 'axios'
-import { useAuthStore } from '@/store/useAuthStore'
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+const BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
 export const api = axios.create({
   baseURL: BASE_URL,
-  timeout: 15000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  timeout: 30000,
+  headers: { 'Content-Type': 'application/json' },
 })
 
-api.interceptors.request.use((config) => {
-  const token = useAuthStore.getState().token
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  return config
-})
-
+// Surface API errors cleanly to the UI
 api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    const message =
-      error?.response?.data?.message || error?.message || 'Something went wrong while reaching the server.'
-    return Promise.reject({ message, status: error?.response?.status })
-  },
+  (res) => res,
+  (err) => {
+    const status = err?.response?.status
+    if (status === 503) {
+      err.userMessage =
+        err.response?.data?.detail ||
+        'Weather service is busy. Please retry in a few seconds.'
+    } else if (status === 429) {
+      err.userMessage = 'Rate limited. Please wait a moment and retry.'
+    } else if (!err.response) {
+      err.userMessage =
+        'Cannot reach the backend. Is it running on port 8000?'
+    }
+    return Promise.reject(err)
+  }
 )
-
-export const isMockEnabled = () => import.meta.env.VITE_USE_MOCK === 'true'

@@ -1,5 +1,5 @@
 """
-Forecast route — Layer 2a + Layer 3 + Layer 4/5.
+Forecast route — Layer 2a + Layer 3 + Layer 4.
 
 Flow:
   1. Coordinates from request
@@ -9,6 +9,9 @@ Flow:
   5. Solar or wind physics (Layer 4)
   6. Enrich each hour with weather values (GHI, wind speed)
   7. Summary + response
+
+Production behavior:
+  - No mock fallback. If weather is unreachable, returns HTTP 503.
 """
 
 from datetime import datetime, timezone
@@ -18,7 +21,13 @@ from fastapi import APIRouter, HTTPException
 from app.schemas.forecast import (
     ForecastRequest, ForecastResponse, HourlyForecast, ForecastSummary,
 )
-from app.services import weather_service, solar_service, wind_service, downscale_service
+from app.services import (
+    weather_service,
+    solar_service,
+    wind_service,
+    downscale_service,
+)
+from app.services.weather_service import WeatherFetchError
 
 router = APIRouter(prefix="/api", tags=["forecast"])
 
@@ -61,10 +70,11 @@ def _coerce_hourly(raw: Any, fallback_times: list) -> list:
             p10 = float(h.get("p10MW", h.get("p10", mw)) or mw)
             p90 = float(h.get("p90MW", h.get("p90", mw)) or mw)
             status = h.get("status", "normal")
-            prov = h.get("provenance", ["pvlib", "xgboost"])
+            prov = h.get("provenance", ["pvlib", "open-meteo"])
             t = h.get("time", t)
         elif isinstance(h, (int, float)):
-            mw = float(h); p10, p90 = mw * 0.85, mw * 1.10
+            mw = float(h)
+            p10, p90 = mw * 0.85, mw * 1.10
             status, prov = "normal", ["pvlib"]
         else:
             continue
@@ -92,12 +102,18 @@ async def create_forecast(req: ForecastRequest):
     # ── 2. Weather (Layer 2a) ──────────────────────────────────────
     try:
         om = await weather_service.fetch_forecast(lat, lon, 72)
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Weather fetch failed: {e}")
+    except WeatherFetchError:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Weather provider (Open-Meteo) is temporarily unavailable. "
+                "Please retry in 30–60 seconds."
+            ),
+        )
 
     hours_list = _reshape_open_meteo(om)
     if not hours_list:
-        raise HTTPException(status_code=502, detail="Weather data unavailable")
+        raise HTTPException(status_code=502, detail="Weather data empty")
 
     # Open-Meteo response includes the elevation used for its grid
     block_elev = om.get("elevation")
@@ -112,10 +128,12 @@ async def create_forecast(req: ForecastRequest):
 
     if hours_list and "_downscaling" in hours_list[0]:
         meta = hours_list[0]["_downscaling"]
-        print(f"[forecast] downscale method={meta.get('method')} "
-              f"block_elev={meta.get('block_elevation_m')} "
-              f"site_elev={meta.get('site_elevation_m')} "
-              f"dz={meta.get('dz_m')} ΔT={meta.get('delta_temp_c')}°C")
+        print(
+            f"[forecast] downscale method={meta.get('method')} "
+            f"block_elev={meta.get('block_elevation_m')} "
+            f"site_elev={meta.get('site_elevation_m')} "
+            f"dz={meta.get('dz_m')} ΔT={meta.get('delta_temp_c')}°C"
+        )
 
     times = [h["time"] for h in hours_list]
 
@@ -132,24 +150,30 @@ async def create_forecast(req: ForecastRequest):
         elif asset_type == "wind":
             raw = wind_service.forecast_wind(hours_list, params)
         else:
-            raise HTTPException(status_code=400, detail=f"Unknown asset type: {asset_type}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown asset type: {asset_type}",
+            )
     except HTTPException:
         raise
     except Exception as e:
         import traceback
         print(f"[forecast] model error: {e}")
         traceback.print_exc()
-        raw = [{"expectedMW": 0.0, "p10MW": 0.0, "p90MW": 0.0, "status": "normal"} for _ in hours_list]
+        raise HTTPException(
+            status_code=500,
+            detail="Forecast model failed. Please retry.",
+        )
 
     # ── 6. Normalize ───────────────────────────────────────────────
     hourly = _coerce_hourly(raw, times)
     if not hourly:
-        hourly = [HourlyForecast(
-            time=t, expectedMW=0.0, p10MW=0.0, p90MW=0.0,
-            status="normal", provenance=["fallback"],
-        ) for t in times]
+        raise HTTPException(
+            status_code=500,
+            detail="Forecast model returned no data.",
+        )
 
-    # ── 6b. Enrich each hour with the weather values so the frontend
+    # ── 6b. Enrich each hour with weather values so the frontend
     #         can display GHI (solar tab) and wind speed (wind tab).
     for i, h in enumerate(hourly):
         if i < len(hours_list):

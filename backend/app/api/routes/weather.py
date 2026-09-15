@@ -13,16 +13,20 @@ the flat shape the frontend expects:
       "humidityPct": float,
       "ghi": float,
       "time": str,
-      "source": "open-meteo" | "fallback"
+      "source": "open-meteo",
+      "provenance": "model-derived"
     }
 
-Also exposes an hourly weather endpoint.
+Production behavior:
+  - No mock fallback anywhere. If Open-Meteo is unreachable,
+    this route returns HTTP 503 with a clear retry message.
 """
 
 from datetime import datetime, timezone
 from fastapi import APIRouter, Query, HTTPException
 
 from app.services import weather_service
+from app.services.weather_service import WeatherFetchError
 
 router = APIRouter(prefix="/api/weather", tags=["weather"])
 
@@ -64,13 +68,7 @@ _WMO_CONDITION = {
 
 
 def _reshape_current(om: dict) -> dict:
-    """
-    Turn Open-Meteo's nested {"current": {...}} into the flat shape
-    the frontend consumes.
-
-    Handles both real Open-Meteo responses AND our fallback mock,
-    which already uses {"current": {...}}.
-    """
+    """Turn Open-Meteo's nested {"current": {...}} into the flat frontend shape."""
     cur = om.get("current") or {}
 
     def pick(*keys, default=0.0):
@@ -80,7 +78,6 @@ def _reshape_current(om: dict) -> dict:
                 return v
         return default
 
-    # Wind speed comes in km/h from Open-Meteo by default
     wind_kmh = pick("wind_speed_10m", "wind_speed", default=0.0)
     try:
         wind_ms = float(wind_kmh) / 3.6
@@ -103,6 +100,7 @@ def _reshape_current(om: dict) -> dict:
         "humidityPct": float(pick("relative_humidity_2m", "humidity", default=0.0)),
         "ghi": float(pick("shortwave_radiation", "ghi", default=0.0)),
         "source": "open-meteo",
+        "provenance": "model-derived",
     }
 
 
@@ -116,8 +114,14 @@ async def get_current(
 ):
     try:
         om = await weather_service.fetch_current(lat, lon)
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Weather fetch failed: {e}")
+    except WeatherFetchError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Weather provider (Open-Meteo) is temporarily unavailable. "
+                "Please retry in 30–60 seconds."
+            ),
+        )
 
     return _reshape_current(om)
 
@@ -133,14 +137,20 @@ async def get_forecast_weather(
 ):
     try:
         om = await weather_service.fetch_forecast(lat, lon, hours)
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Weather fetch failed: {e}")
+    except WeatherFetchError:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Weather provider (Open-Meteo) is temporarily unavailable. "
+                "Please retry in 30–60 seconds."
+            ),
+        )
 
-    # Pass through the Open-Meteo hourly block — frontend knows the shape
     hourly = om.get("hourly") or {}
     return {
         "latitude": om.get("latitude"),
         "longitude": om.get("longitude"),
         "source": "open-meteo",
+        "provenance": "model-derived",
         "hourly": hourly,
     }

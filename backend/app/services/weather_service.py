@@ -1,11 +1,11 @@
 ﻿"""
-Weather ingestion service — Layer 2a.
+Weather ingestion service — Open-Meteo.
 
-Fetches weather + elevation from Open-Meteo with:
-  - 15-minute in-memory cache
+Production-grade:
+  - Persistent cache (survives rate-limit windows)
   - Retry with exponential backoff on 429
-  - Graceful fallback to realistic mock data
-  - UTC-normalized ISO timestamps (all times end with 'Z')
+  - NO mock fallback — failures propagate as HTTP 503
+  - All timestamps normalized to UTC ISO strings with 'Z' suffix
 """
 
 from datetime import datetime, timedelta
@@ -14,12 +14,16 @@ import asyncio
 import httpx
 
 # ─── In-memory cache ───────────────────────────────────────────────────
+# Longer TTL prevents hammering Open-Meteo from the same coordinates.
+# 30 min = at most 2 real fetches per hour per site.
 _cache: dict = {}
-CACHE_TTL = timedelta(minutes=15)
+CACHE_TTL = timedelta(minutes=30)
 
 
 def _cache_key(lat: float, lon: float, kind: str, hours: int = 0) -> str:
-    return f"{kind}:{round(lat, 2)}:{round(lon, 2)}:{hours}"
+    # 3-decimal precision (~100 m) — fine-grained enough for site-specific
+    # but coarse enough to reuse cache for nearby retries.
+    return f"{kind}:{round(lat, 3)}:{round(lon, 3)}:{hours}"
 
 
 def _get_cached(key: str):
@@ -40,12 +44,7 @@ def _set_cached(key: str, value) -> None:
 # ─── UTC time normalization ─────────────────────────────────────────────
 
 def _ensure_utc_iso(t: str) -> str:
-    """
-    Ensure a time string ends with a UTC marker 'Z'.
-    Open-Meteo returns 'YYYY-MM-DDTHH:MM' (16 chars, no seconds).
-    We pad to 'YYYY-MM-DDTHH:MM:SSZ' for standard ISO 8601 so the
-    frontend parses every timestamp as UTC, not as browser-local time.
-    """
+    """Ensure time string ends with 'Z' (UTC marker)."""
     if not t:
         return t
     if t.endswith("Z"):
@@ -66,113 +65,100 @@ def _normalize_hourly_times(data: dict) -> dict:
     return data
 
 
-# ─── Mock fallbacks ─────────────────────────────────────────────────────
-
-def _mock_forecast(lat: float, lon: float, hours: int = 72) -> dict:
-    now = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
-    hourly = []
-    for h in range(hours):
-        t = now + timedelta(hours=h)
-        hod = t.hour
-        ghi = 900 * max(0, 1 - abs(hod - 12) / 6) if 6 <= hod <= 18 else 0
-        hourly.append({
-            "time": t.isoformat() + "Z",
-            "shortwave_radiation": ghi,
-            "direct_normal_irradiance": ghi * 0.7,
-            "diffuse_radiation": ghi * 0.3,
-            "cloud_cover": 20,
-            "temperature_2m": 28 + 6 * (1 - abs(hod - 14) / 12),
-            "relative_humidity_2m": 55,
-            "wind_speed_10m": 4.5,
-            "wind_direction_10m": 220,
-            "surface_pressure": 1010,
-            "precipitation": 0,
-        })
-    return {
-        "latitude": lat, "longitude": lon, "elevation": 100.0,
-        "hourly": {
-            "time": [h["time"] for h in hourly],
-            "shortwave_radiation": [h["shortwave_radiation"] for h in hourly],
-            "direct_normal_irradiance": [h["direct_normal_irradiance"] for h in hourly],
-            "diffuse_radiation": [h["diffuse_radiation"] for h in hourly],
-            "cloud_cover": [h["cloud_cover"] for h in hourly],
-            "temperature_2m": [h["temperature_2m"] for h in hourly],
-            "relative_humidity_2m": [h["relative_humidity_2m"] for h in hourly],
-            "wind_speed_10m": [h["wind_speed_10m"] for h in hourly],
-            "wind_direction_10m": [h["wind_direction_10m"] for h in hourly],
-            "surface_pressure": [h["surface_pressure"] for h in hourly],
-            "precipitation": [h["precipitation"] for h in hourly],
-        },
-    }
-
-
-def _mock_current(lat: float, lon: float) -> dict:
-    return {
-        "latitude": lat, "longitude": lon, "elevation": 100.0,
-        "current": {
-            "time": datetime.utcnow().isoformat() + "Z",
-            "temperature_2m": 30.2,
-            "relative_humidity_2m": 52,
-            "wind_speed_10m": 4.1,
-            "shortwave_radiation": 720,
-            "weather_code": 1,
-        },
-    }
-
-
-# ─── Retry + fallback wrapper ───────────────────────────────────────────
+# ─── HTTP client with retry ─────────────────────────────────────────────
 
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 OPEN_METEO_ELEV_URL = "https://api.open-meteo.com/v1/elevation"
 
-MAX_RETRIES = 3
-BASE_BACKOFF = 1.5
+MAX_RETRIES = 4
+BASE_BACKOFF = 2.0   # 2s, 4s, 8s, 16s
 
 
-async def _fetch_om(url: str, params: dict, fallback_factory, label: str) -> dict:
+class WeatherFetchError(RuntimeError):
+    """Raised when Open-Meteo is unreachable after retries."""
+    pass
+
+
+async def _fetch_om(url: str, params: dict, label: str) -> dict:
+    """
+    Fetch from Open-Meteo with retry + exponential backoff.
+    Raises WeatherFetchError if all attempts fail — no silent fallback.
+    """
     last_err: Optional[Exception] = None
+
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
+            async with httpx.AsyncClient(timeout=20.0) as client:
                 r = await client.get(url, params=params)
+
                 if r.status_code == 429:
-                    print(f"[weather:{label}] 429 attempt {attempt}/{MAX_RETRIES}")
-                    last_err = httpx.HTTPStatusError("429", request=r.request, response=r)
+                    retry_after = int(r.headers.get("Retry-After", 0))
+                    wait = max(retry_after, BASE_BACKOFF * (2 ** (attempt - 1)))
+                    print(f"[weather:{label}] 429 — waiting {wait:.0f}s "
+                          f"(attempt {attempt}/{MAX_RETRIES})")
+                    last_err = httpx.HTTPStatusError(
+                        "429", request=r.request, response=r
+                    )
+                    if attempt < MAX_RETRIES:
+                        await asyncio.sleep(wait)
+                        continue
+                    break
+
+                if r.status_code >= 500:
+                    print(f"[weather:{label}] {r.status_code} — retrying")
+                    last_err = httpx.HTTPStatusError(
+                        f"{r.status_code}", request=r.request, response=r
+                    )
                     if attempt < MAX_RETRIES:
                         await asyncio.sleep(BASE_BACKOFF * (2 ** (attempt - 1)))
                         continue
                     break
+
                 r.raise_for_status()
                 return r.json()
+
         except (httpx.TimeoutException, httpx.NetworkError, httpx.ConnectError) as e:
-            print(f"[weather:{label}] network err {attempt}: {e}")
+            print(f"[weather:{label}] network err attempt {attempt}: {e}")
             last_err = e
             if attempt < MAX_RETRIES:
                 await asyncio.sleep(BASE_BACKOFF * (2 ** (attempt - 1)))
                 continue
             break
+
         except httpx.HTTPStatusError as e:
             print(f"[weather:{label}] HTTP {e.response.status_code}")
             last_err = e
+            if attempt < MAX_RETRIES and e.response.status_code >= 500:
+                await asyncio.sleep(BASE_BACKOFF * (2 ** (attempt - 1)))
+                continue
             break
+
         except Exception as e:
             print(f"[weather:{label}] unexpected: {e}")
             last_err = e
             break
 
-    print(f"[weather:{label}] fallback. Last: {last_err}")
-    return fallback_factory()
+    # No fallback — raise so the caller/route returns 503
+    raise WeatherFetchError(
+        f"Open-Meteo {label} failed after {MAX_RETRIES} attempts. "
+        f"Last error: {type(last_err).__name__}: {last_err}"
+    )
 
 
 # ─── Public API ─────────────────────────────────────────────────────────
 
 async def fetch_forecast(lat: float, lon: float, hours: int = 72) -> dict:
+    """
+    Fetch 72h hourly forecast from Open-Meteo.
+    Raises WeatherFetchError on failure — caller must handle.
+    """
     key = _cache_key(lat, lon, "forecast", hours)
     if (c := _get_cached(key)) is not None:
         return c
 
     params = {
-        "latitude": lat, "longitude": lon,
+        "latitude": lat,
+        "longitude": lon,
         "hourly": (
             "shortwave_radiation,direct_normal_irradiance,diffuse_radiation,"
             "cloud_cover,temperature_2m,relative_humidity_2m,"
@@ -181,46 +167,35 @@ async def fetch_forecast(lat: float, lon: float, hours: int = 72) -> dict:
         "forecast_days": 3,
         "timezone": "UTC",
     }
-    data = await _fetch_om(
-        OPEN_METEO_URL, params,
-        lambda: _mock_forecast(lat, lon, hours),
-        label="forecast",
-    )
 
-    # ── Normalize every time to UTC (ends with 'Z') before caching ──
+    data = await _fetch_om(OPEN_METEO_URL, params, label="forecast")
     data = _normalize_hourly_times(data)
-
     _set_cached(key, data)
     return data
 
 
 async def fetch_current(lat: float, lon: float) -> dict:
+    """Fetch current weather conditions."""
     key = _cache_key(lat, lon, "current")
     if (c := _get_cached(key)) is not None:
         return c
 
     params = {
-        "latitude": lat, "longitude": lon,
+        "latitude": lat,
+        "longitude": lon,
         "current": (
             "temperature_2m,relative_humidity_2m,wind_speed_10m,"
             "shortwave_radiation,weather_code"
         ),
         "timezone": "UTC",
     }
-    data = await _fetch_om(
-        OPEN_METEO_URL, params,
-        lambda: _mock_current(lat, lon),
-        label="current",
-    )
+    data = await _fetch_om(OPEN_METEO_URL, params, label="current")
     _set_cached(key, data)
     return data
 
 
 async def fetch_elevation(lat: float, lon: float) -> Optional[float]:
-    """
-    Fetch elevation (m) from Open-Meteo's DEM (90 m resolution).
-    Returns None if unavailable — caller should skip downscaling.
-    """
+    """Fetch elevation (m). Returns None on failure — not critical."""
     key = _cache_key(lat, lon, "elev")
     if (c := _get_cached(key)) is not None:
         return c
